@@ -1,11 +1,7 @@
-/** Build-safe product identity. app.config.ts imports this without loading assets. */
-export const brandMeta = {
-  name: 'Paliwan',
-  descriptor: 'Food, understood.',
-  colors: {
-    green: '#008C4A',
-    deepGreen: '#005C36',
-    mint: '#E7F4EC',
-    gold: '#D9A441',
-  },
-} as const;
+import meta from './brandMeta.json';
+
+/**
+ * Build-safe product identity. It lives in JSON so `app.config.ts` can read it
+ * on any Node version — Node only loads `.ts` files natively from 22.18 on.
+ */
+export const brandMeta = meta;
