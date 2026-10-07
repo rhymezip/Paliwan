@@ -6,9 +6,8 @@ import { SYSTEM_PROMPT } from '@/api/prompt';
  *
  * Uses the Generative Language API. The key travels in the `x-goog-api-key`
  * header rather than the URL, so it never lands in request logs.
- * `gemini-3.8-flash` is chosen because it has vision and
- * carries a free-tier quota, so the app works without a funded account
- * (`gemini-2.5-flash` is closed to new keys). The
+ * Current flash models have vision and a free-tier quota, so the app works
+ * without a funded account (`gemini-2.5-flash` is closed to new keys). The
  * task prompt goes in `systemInstruction`; the image and the per-request ask go
  * in `contents`. `responseMimeType: application/json` makes the model return a
  * bare JSON object, which the shared parser then reads.
@@ -20,11 +19,13 @@ import { SYSTEM_PROMPT } from '@/api/prompt';
  * failing the estimate.
  */
 const MODELS = [
-  { name: 'gemini-3.8-flash', attempts: 2 },
   { name: 'gemini-3.5-flash', attempts: 2 },
+  { name: 'gemini-3.1-flash-lite', attempts: 1 },
+  { name: 'gemini-3.8-flash', attempts: 1 },
 ] as const;
 const MODELS_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
-const TIMEOUT_MS = 30_000;
+/** Per request. A busy model can hang instead of answering 503, so give up and move on. */
+const TIMEOUT_MS = 20_000;
 const RETRY_DELAY_MS = 700;
 
 function endpointFor(model: string): string {
@@ -86,7 +87,8 @@ export async function estimateWithGemini(
       } catch (error) {
         // Only an overloaded or retired model is worth another try; a bad key,
         // a rate limit or a cancel is the same on every model.
-        if (!(error instanceof VisionError) || error.kind !== 'server') throw error;
+        const retryable = error instanceof VisionError && (error.kind === 'server' || error.kind === 'timeout');
+        if (!retryable) throw error;
         lastError = error;
         await pause(RETRY_DELAY_MS * (attempt + 1), signal);
       }
