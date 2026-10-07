@@ -87,6 +87,8 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text,
     fontFamily: t.font.semibold,
     fontSize: 17,
+    // The box border shows focus; drop the browser's own ring in the web preview.
+    outlineWidth: 0,
   },
   numeric: { fontFamily: t.font.bold, fontSize: 20, fontVariant: ['tabular-nums'] },
 }));

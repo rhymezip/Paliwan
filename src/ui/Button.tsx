@@ -5,7 +5,7 @@ import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Icon } from '@/ui/Icon';
 import { Text } from '@/ui/Text';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'onMedia';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'onMedia' | 'ghostOnMedia';
 
 interface ButtonProps {
   label: string;
@@ -41,6 +41,7 @@ export function Button({
     ghost: theme.colors.primary,
     danger: theme.colors.danger,
     onMedia: theme.colors.onMedia,
+    ghostOnMedia: theme.colors.onMedia,
   }[variant];
 
   return (
@@ -89,6 +90,7 @@ const useStyles = makeStyles((t) => ({
   ghost: { backgroundColor: 'transparent' },
   danger: { backgroundColor: t.colors.dangerSoft },
   onMedia: { backgroundColor: 'rgba(255, 255, 255, 0.22)' },
+  ghostOnMedia: { backgroundColor: 'transparent' },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
   content: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },

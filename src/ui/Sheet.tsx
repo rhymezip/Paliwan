@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,6 +30,8 @@ export function Sheet({ visible, onClose, title, children, footer }: SheetProps)
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { tr } = useI18n();
+  // In pixels: a percentage would resolve against the auto-sized parent.
+  const { height } = useWindowDimensions();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -40,7 +43,7 @@ export function Sheet({ visible, onClose, title, children, footer }: SheetProps)
           accessibilityLabel={tr.common.close}
         />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: height * 0.9 }]}>
             <View style={styles.grabber} />
             <View style={styles.header}>
               <Text variant="heading" style={styles.title}>
@@ -71,7 +74,6 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.background,
     borderTopLeftRadius: t.radius.xl,
     borderTopRightRadius: t.radius.xl,
-    maxHeight: '90%',
   },
   grabber: {
     alignSelf: 'center',
@@ -89,7 +91,8 @@ const useStyles = makeStyles((t) => ({
     gap: t.space.md,
   },
   title: { flex: 1 },
-  body: { paddingHorizontal: t.layout.gutter },
+  // Size to the content, shrinking (and scrolling) only when the sheet hits its max height.
+  body: { paddingHorizontal: t.layout.gutter, flexGrow: 0, flexShrink: 1 },
   bodyContent: { paddingVertical: t.space.base, gap: t.space.md },
   footer: { paddingHorizontal: t.layout.gutter, paddingTop: t.space.sm, gap: t.space.sm },
 }));

@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +28,17 @@ import { useToast } from '@/ui/Toast';
 import { confirm } from '@/ui/misc';
 
 const TICK_MS = 200;
+const KEEP_AWAKE_TAG = 'workout';
+
+/** Keeps the screen on during a workout. Best effort: browsers may refuse. */
+function useScreenAwake(): void {
+  useEffect(() => {
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
+    return () => {
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+    };
+  }, []);
+}
 
 export default function WorkoutScreen() {
   const router = useRouter();
@@ -46,7 +57,7 @@ export default function WorkoutScreen() {
 }
 
 function Player({ program, sessionIndex }: { program: Program; sessionIndex: number }) {
-  useKeepAwake();
+  useScreenAwake();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -191,7 +202,7 @@ function Player({ program, sessionIndex }: { program: Program; sessionIndex: num
         </View>
         <View style={styles.footer}>
           <Button label={tr.workout.save} icon="check" variant="onMedia" loading={saving} onPress={() => void save()} />
-          <Button label={tr.common.close} variant="ghost" onPress={() => router.back()} style={styles.ghost} />
+          <Button label={tr.common.close} variant="ghostOnMedia" onPress={() => router.back()} />
         </View>
       </View>
     );
@@ -330,5 +341,4 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ghost: { opacity: 0.9 },
 }));

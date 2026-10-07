@@ -103,7 +103,7 @@ export default function HomeScreen() {
           <Text variant="caption" tone="muted">
             {longDate(today)}
           </Text>
-          <Text variant="title" numberOfLines={1}>
+          <Text variant="heading" numberOfLines={2}>
             {f(tr.home[greetingFor(hour)], { name: profile.name })}
           </Text>
         </View>
