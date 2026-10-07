@@ -26,6 +26,7 @@ import { Text } from '@/ui/Text';
 import { Screen } from '@/ui/Screen';
 import { useToast } from '@/ui/Toast';
 import { confirm } from '@/ui/misc';
+import { closeScreen } from '@/ui/navigation';
 
 const TICK_MS = 200;
 const KEEP_AWAKE_TAG = 'workout';
@@ -46,7 +47,7 @@ export default function WorkoutScreen() {
   const program = programById(programId ?? '');
   const completions = useProgramStore((state) => state.completions);
 
-  if (!program) return <Screen onBack={() => router.back()} />;
+  if (!program) return <Screen onBack={() => closeScreen(router)} />;
 
   const requested = session !== undefined ? Number.parseInt(session, 10) : Number.NaN;
   const sessionIndex = Number.isFinite(requested)
@@ -149,7 +150,7 @@ function Player({ program, sessionIndex }: { program: Program; sessionIndex: num
       cancelLabel: tr.common.cancel,
       destructive: true,
     });
-    if (ok) router.back();
+    if (ok) closeScreen(router);
   };
 
   const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
@@ -171,7 +172,7 @@ function Player({ program, sessionIndex }: { program: Program; sessionIndex: num
       await completeSession(program.id, sessionIndex, activity.id);
       if (activeProgramId !== program.id) await setActiveProgram(program.id);
       toast.show({ message: tr.toast.workoutSaved, tone: 'success' });
-      router.back();
+      closeScreen(router);
     } catch {
       setSaving(false);
       toast.show({ message: tr.common.errorGeneric, tone: 'error' });
@@ -202,7 +203,7 @@ function Player({ program, sessionIndex }: { program: Program; sessionIndex: num
         </View>
         <View style={styles.footer}>
           <Button label={tr.workout.save} icon="check" variant="onMedia" loading={saving} onPress={() => void save()} />
-          <Button label={tr.common.close} variant="ghostOnMedia" onPress={() => router.back()} />
+          <Button label={tr.common.close} variant="ghostOnMedia" onPress={() => closeScreen(router)} />
         </View>
       </View>
     );

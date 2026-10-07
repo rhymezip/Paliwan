@@ -28,7 +28,7 @@ export function Segmented<T extends string>({ options, value, onChange }: Segmen
             accessibilityState={{ selected }}
             style={[styles.segment, selected && styles.selected]}
           >
-            <Text variant="label" tone={selected ? 'default' : 'muted'} numberOfLines={1}>
+            <Text variant="label" tone={selected ? 'default' : 'muted'} numberOfLines={2} align="center">
               {option.label}
             </Text>
           </Pressable>

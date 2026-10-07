@@ -16,6 +16,7 @@ import { Icon } from '@/ui/Icon';
 import { ProgressRing } from '@/ui/ProgressRing';
 import { Screen } from '@/ui/Screen';
 import { Text } from '@/ui/Text';
+import { closeScreen } from '@/ui/navigation';
 
 export default function StepsScreen() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function StepsScreen() {
     }, []),
   );
 
-  if (!profile) return <Screen onBack={() => router.back()} />;
+  if (!profile) return <Screen onBack={() => closeScreen(router)} />;
 
   const goal = profile.stepGoal;
   const todayDate = localDateString();
@@ -46,7 +47,7 @@ export default function StepsScreen() {
   const kcal = stepsToKcal(today, profile.weightKg, profile.heightCm, profile.sex);
 
   return (
-    <Screen onBack={() => router.back()} title={tr.steps.title}>
+    <Screen onBack={() => closeScreen(router)} title={tr.steps.title}>
       {permission === 'granted' ? (
         <>
           <Card style={styles.hero}>

@@ -18,6 +18,7 @@ import { Screen } from '@/ui/Screen';
 import { Segmented } from '@/ui/Segmented';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
+import { closeScreen } from '@/ui/navigation';
 
 const LOADS: readonly TrainingLoad[] = ['light', 'moderate', 'high', 'very_high'];
 
@@ -40,7 +41,7 @@ export default function ProfileEditScreen() {
   const [goal, setGoal] = useState<Goal>(profile?.goal ?? 'perform');
   const [saving, setSaving] = useState(false);
 
-  if (!profile) return <Screen onBack={() => router.back()} />;
+  if (!profile) return <Screen onBack={() => closeScreen(router)} />;
 
   const age = Number.parseInt(ageText, 10);
   const height = Number.parseFloat(heightText.replace(',', '.'));
@@ -69,7 +70,7 @@ export default function ProfileEditScreen() {
         goal: effectiveGoal,
       });
       toast.show({ message: tr.toast.profileSaved, tone: 'success' });
-      router.back();
+      closeScreen(router);
     } catch {
       setSaving(false);
       toast.show({ message: tr.common.errorGeneric, tone: 'error' });
@@ -78,7 +79,7 @@ export default function ProfileEditScreen() {
 
   return (
     <Screen
-      onBack={() => router.back()}
+      onBack={() => closeScreen(router)}
       backIcon="close"
       title={tr.profile.edit}
       footer={<Button label={tr.profile.save} icon="check" disabled={!valid} loading={saving} onPress={() => void save()} />}

@@ -21,6 +21,7 @@ import { Sheet } from '@/ui/Sheet';
 import { Stepper } from '@/ui/Stepper';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
+import { closeScreen } from '@/ui/navigation';
 
 /** Local and everyday foods with typical portions — works with no internet. */
 export default function FoodLibraryScreen() {
@@ -79,7 +80,7 @@ export default function FoodLibraryScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.show({ message: tr.toast.mealSaved, tone: 'success' });
       setSelected(null);
-      router.back();
+      closeScreen(router);
     } catch {
       toast.show({ message: tr.common.errorGeneric, tone: 'error' });
     } finally {
@@ -88,7 +89,7 @@ export default function FoodLibraryScreen() {
   };
 
   return (
-    <Screen onBack={() => router.back()} backIcon="close" title={tr.library.title} subtitle={tr.library.approx}>
+    <Screen onBack={() => closeScreen(router)} backIcon="close" title={tr.library.title} subtitle={tr.library.approx}>
       <Field value={query} onChangeText={setQuery} placeholder={tr.library.search} autoCorrect={false} />
       <Card padded={false} style={styles.list}>
         {foods.length === 0 ? (

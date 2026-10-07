@@ -18,6 +18,7 @@ import { Screen } from '@/ui/Screen';
 import { Segmented } from '@/ui/Segmented';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
+import { closeScreen } from '@/ui/navigation';
 
 function parse(value: string): number {
   const parsed = Number.parseFloat(value.replace(',', '.'));
@@ -51,7 +52,7 @@ export default function ManualScreen() {
     // The photo was only kept for this meal; without it, it is an orphan file.
     deletePhoto(photoUri);
     clear();
-    router.back();
+    closeScreen(router);
   };
 
   const save = async () => {
@@ -83,7 +84,7 @@ export default function ManualScreen() {
       clear();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.show({ message: tr.toast.mealSaved, tone: 'success' });
-      router.back();
+      closeScreen(router);
     } catch {
       setSaving(false);
       toast.show({ message: tr.common.errorGeneric, tone: 'error' });

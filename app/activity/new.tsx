@@ -21,6 +21,7 @@ import { Stepper } from '@/ui/Stepper';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 import { SectionHeader } from '@/ui/misc';
+import { closeScreen } from '@/ui/navigation';
 
 export default function NewActivityScreen() {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function NewActivityScreen() {
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       toast.show({ message: tr.toast.activitySaved, tone: 'success' });
-      router.back();
+      closeScreen(router);
     } catch {
       setSaving(false);
       toast.show({ message: tr.common.errorGeneric, tone: 'error' });
@@ -65,7 +66,7 @@ export default function NewActivityScreen() {
 
   return (
     <Screen
-      onBack={() => router.back()}
+      onBack={() => closeScreen(router)}
       backIcon="close"
       title={tr.activity.title}
       footer={<Button label={tr.activity.save} icon="check" loading={saving} onPress={() => void save()} />}

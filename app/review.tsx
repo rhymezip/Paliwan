@@ -25,6 +25,7 @@ import { Screen } from '@/ui/Screen';
 import { Segmented } from '@/ui/Segmented';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
+import { closeScreen } from '@/ui/navigation';
 
 type Phase = { kind: 'analyzing' } | { kind: 'error'; error: unknown } | { kind: 'review' };
 
@@ -111,7 +112,7 @@ export default function ReviewScreen() {
     abortRef.current?.abort();
     deletePhoto(photoUri);
     clear();
-    router.back();
+    closeScreen(router);
   };
 
   const addSuggestion = (suggestion: string) => {

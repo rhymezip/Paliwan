@@ -18,6 +18,7 @@ import { Icon } from '@/ui/Icon';
 import { Screen } from '@/ui/Screen';
 import { Text } from '@/ui/Text';
 import { confirm, SectionHeader } from '@/ui/misc';
+import { closeScreen } from '@/ui/navigation';
 
 export default function ProgramScreen() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function ProgramScreen() {
   const activeProgramId = useSettingsStore((state) => state.activeProgramId);
   const setActiveProgram = useSettingsStore((state) => state.setActiveProgram);
 
-  if (!program) return <Screen onBack={() => router.back()} />;
+  if (!program) return <Screen onBack={() => closeScreen(router)} />;
 
   const done = completedSessions(completions, program.id);
   const next = nextSessionIndex(completions, program.id);
@@ -57,7 +58,7 @@ export default function ProgramScreen() {
 
   return (
     <Screen
-      onBack={() => router.back()}
+      onBack={() => closeScreen(router)}
       footer={
         next !== null ? (
           <Button

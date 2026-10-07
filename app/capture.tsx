@@ -18,6 +18,7 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
+import { closeScreen } from '@/ui/navigation';
 
 type FlashMode = 'off' | 'on' | 'auto';
 
@@ -89,7 +90,7 @@ export default function CaptureScreen() {
         </Text>
         <Button label={tr.capture.allowCamera} onPress={() => void requestPermission()} />
         <Button label={tr.capture.pickLibrary} variant="onMedia" onPress={() => void pickFromLibrary()} />
-        <Button label={tr.common.cancel} variant="ghost" onPress={() => router.back()} />
+        <Button label={tr.common.cancel} variant="ghost" onPress={() => closeScreen(router)} />
       </View>
     );
   }
@@ -99,7 +100,7 @@ export default function CaptureScreen() {
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flash} />
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <RoundButton icon="close" label={tr.common.cancel} onPress={() => router.back()} />
+        <RoundButton icon="close" label={tr.common.cancel} onPress={() => closeScreen(router)} />
         <RoundButton
           icon={FLASH_ICON[flash]}
           label={tr.capture.flash}

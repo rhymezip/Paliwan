@@ -83,6 +83,7 @@ const useStyles = makeStyles((t) => ({
   errored: { borderColor: t.colors.danger },
   input: {
     flex: 1,
+    minWidth: 0,
     minHeight: 50,
     color: t.colors.text,
     fontFamily: t.font.semibold,

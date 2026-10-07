@@ -19,6 +19,7 @@ import { Screen } from '@/ui/Screen';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 import { EmptyState, SectionHeader } from '@/ui/misc';
+import { closeScreen } from '@/ui/navigation';
 
 export default function WaterScreen() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function WaterScreen() {
   useFocusEffect(
     useCallback(() => {
       void useWaterStore.getState().load().catch(() => undefined);
+      // Today's training raises the goal, so the activities must be current too.
+      void useActivityStore.getState().load().catch(() => undefined);
     }, []),
   );
 
@@ -58,7 +61,7 @@ export default function WaterScreen() {
   };
 
   return (
-    <Screen onBack={() => router.back()} title={tr.water.title}>
+    <Screen onBack={() => closeScreen(router)} title={tr.water.title}>
       <Card style={styles.hero}>
         <ProgressRing size={210} stroke={18} progress={totalMl / goal} color={theme.colors.water}>
           <Icon name="water" size={30} color={theme.colors.water} />
