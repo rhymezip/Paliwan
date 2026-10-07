@@ -115,10 +115,11 @@ function ThemedStack() {
           <Stack.Screen name="steps" options={fromBottom} />
           <Stack.Screen name="activity/new" options={fromBottom} />
           <Stack.Screen name="food/library" options={fromBottom} />
-          <Stack.Screen name="manual" options={fromBottom} />
           <Stack.Screen name="profile-edit" options={fromBottom} />
           <Stack.Screen name="program/[id]" />
-          <Stack.Screen name="review" />
+          {/* The photo flow swaps capture → review → manual; iOS modals are its tested path. */}
+          <Stack.Screen name="review" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
           <Stack.Screen
             name="workout/[programId]"
             options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
