@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 
 import { DROP_ALL, LATEST_VERSION, MIGRATIONS } from '@/db/schema';
 
-const DATABASE_NAME = 'snap.db';
+const DATABASE_NAME = 'paliwan.db';
 
 let database: SQLite.SQLiteDatabase | null = null;
 let opening: Promise<SQLite.SQLiteDatabase> | null = null;
