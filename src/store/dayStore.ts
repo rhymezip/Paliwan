@@ -126,11 +126,7 @@ async function resolveTarget(
     return ensureDailyTarget(localDate, profile);
   }
 
-  const macros = macroTargets(profile.targetCalories, {
-    proteinPct: profile.proteinPct,
-    carbsPct: profile.carbsPct,
-    fatPct: profile.fatPct,
-  });
+  const macros = macroTargets(profile.targetCalories, profile.weightKg);
   return {
     localDate,
     targetCalories: profile.targetCalories,

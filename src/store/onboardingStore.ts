@@ -1,22 +1,20 @@
 import { create } from 'zustand';
 
-import { DEFAULT_SPLIT } from '@/logic/macros';
-import type { ActivityLevel, Goal, Sex, Units } from '@/types';
+import type { Goal, Sex, SportId, TrainingLoad } from '@/types';
 
 /**
- * The onboarding draft. Held in memory only — nothing is written to the database
- * until the user reaches the results screen and taps through.
+ * The onboarding draft. Held in memory only — nothing is written until the
+ * permissions step finishes onboarding.
  */
 interface OnboardingDraft {
+  name: string;
   sex: Sex | null;
   age: number | null;
   heightCm: number | null;
   weightKg: number | null;
-  activityLevel: ActivityLevel | null;
+  sport: SportId | null;
+  trainingLoad: TrainingLoad | null;
   goal: Goal | null;
-  units: Units;
-  /** True when the user chose to skip the API key step. */
-  skippedKey: boolean;
 }
 
 interface OnboardingState extends OnboardingDraft {
@@ -25,14 +23,14 @@ interface OnboardingState extends OnboardingDraft {
 }
 
 const EMPTY: OnboardingDraft = {
+  name: '',
   sex: null,
   age: null,
   heightCm: null,
   weightKg: null,
-  activityLevel: null,
+  sport: null,
+  trainingLoad: null,
   goal: null,
-  units: 'metric',
-  skippedKey: false,
 };
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
@@ -41,23 +39,24 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
   reset: () => set(EMPTY),
 }));
 
-export const ONBOARDING_SPLIT = DEFAULT_SPLIT;
-
-/** Ordered step routes, used by the progress indicator. */
+/** Ordered step routes, used by the progress bar. */
 export const ONBOARDING_STEPS = [
+  'language',
   'welcome',
-  'sex',
-  'age',
-  'height',
-  'weight',
-  'activity',
-  'goal',
-  'api-key',
-  'results',
+  'name',
+  'about',
+  'body',
+  'sport',
+  'training',
+  'targets',
+  'permissions',
 ] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
-export function stepIndex(step: OnboardingStep): number {
-  return ONBOARDING_STEPS.indexOf(step);
-}
+export const ONBOARDING_LIMITS = {
+  age: { min: 10, max: 80 },
+  heightCm: { min: 120, max: 230 },
+  weightKg: { min: 25, max: 200 },
+  nameLength: 30,
+} as const;

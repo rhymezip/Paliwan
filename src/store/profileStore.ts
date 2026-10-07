@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 
 import { getProfile, saveProfile } from '@/db/queries';
-import { energyTargets } from '@/logic/bmr';
-import { DEFAULT_SPLIT } from '@/logic/macros';
+import { applyProfileEdit } from '@/logic/targets';
 import type { Profile } from '@/types';
 
 type Status = 'idle' | 'loading' | 'ready';
@@ -11,13 +10,11 @@ interface ProfileState {
   status: Status;
   profile: Profile | null;
   load: () => Promise<void>;
-  /** Writes the profile as given. Used at the end of onboarding. */
-  create: (profile: Profile) => Promise<void>;
-  /**
-   * Applies a partial edit and recalculates the calorie target. Past days keep
-   * the target that was active at the time — see `ensureDailyTarget`.
-   */
+  /** Writes a complete profile — the end of onboarding. */
+  save: (profile: Profile) => Promise<void>;
+  /** Applies an edit and recomputes the targets that depend on it. */
   update: (patch: Partial<Profile>) => Promise<void>;
+  clear: () => void;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -26,11 +23,15 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   load: async () => {
     set({ status: 'loading' });
-    const profile = await getProfile();
-    set({ profile, status: 'ready' });
+    try {
+      set({ profile: await getProfile(), status: 'ready' });
+    } catch (error) {
+      set({ status: 'ready' });
+      throw error;
+    }
   },
 
-  create: async (profile) => {
+  save: async (profile) => {
     await saveProfile(profile);
     set({ profile, status: 'ready' });
   },
@@ -38,37 +39,15 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   update: async (patch) => {
     const current = get().profile;
     if (!current) return;
-
-    const merged: Profile = { ...current, ...patch };
-    const recalculated: Profile = {
-      ...merged,
-      targetCalories: energyTargets(
-        {
-          sex: merged.sex,
-          age: merged.age,
-          heightCm: merged.heightCm,
-          weightKg: merged.weightKg,
-        },
-        merged.activityLevel,
-        merged.goal,
-      ).target,
-    };
-
-    await saveProfile(recalculated);
-    set({ profile: recalculated });
+    const next = applyProfileEdit(current, patch);
+    await saveProfile(next);
+    set({ profile: next });
   },
+
+  clear: () => set({ profile: null, status: 'ready' }),
 }));
 
-/** A profile with the default split, ready to be filled in by onboarding. */
-export function draftProfile(): Omit<
-  Profile,
-  'sex' | 'age' | 'heightCm' | 'weightKg' | 'activityLevel' | 'goal' | 'targetCalories'
-> {
-  return {
-    proteinPct: DEFAULT_SPLIT.proteinPct,
-    carbsPct: DEFAULT_SPLIT.carbsPct,
-    fatPct: DEFAULT_SPLIT.fatPct,
-    units: 'metric',
-    onboardedAt: new Date().toISOString(),
-  };
+/** A profile counts as onboarded once it has a name (v1 profiles have none). */
+export function isOnboarded(profile: Profile | null): profile is Profile {
+  return profile !== null && profile.name.trim().length > 0;
 }

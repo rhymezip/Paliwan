@@ -1,9 +1,13 @@
 import { Redirect } from 'expo-router';
 
-import { useProfileStore } from '@/store/profileStore';
+import { isOnboarded, useProfileStore } from '@/store/profileStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
-/** Sends a fresh install to onboarding and everyone else to Today. */
+/** First launch goes to the language picker; a named profile goes to Home. */
 export default function Index() {
   const profile = useProfileStore((state) => state.profile);
-  return <Redirect href={profile ? '/(tabs)' : '/onboarding/welcome'} />;
+  const languageChosen = useSettingsStore((state) => state.languageChosen);
+
+  if (isOnboarded(profile)) return <Redirect href="/(tabs)" />;
+  return <Redirect href={languageChosen ? '/onboarding/welcome' : '/onboarding/language'} />;
 }

@@ -1,3 +1,4 @@
+import type { Language } from '@/i18n/types';
 import { MEASURE_UNITS } from '@/types';
 
 /**
@@ -44,8 +45,16 @@ Schema:
   "likely_hidden_ingredients": ["string"]
 }`;
 
-export const USER_PROMPT =
-  'Estimate the calories and macros for this meal. Return raw JSON matching the schema.';
+const LANGUAGE_NAMES: Record<Language, string> = {
+  tk: 'Turkmen (Latin alphabet)',
+  ru: 'Russian',
+  en: 'English',
+};
 
-/** Text used for the one-token key check. */
-export const KEY_CHECK_PROMPT = 'Reply with the single character: ok';
+/** The per-request ask. Names come back in the app's language, so screens never mix languages. */
+export function userPrompt(language: Language): string {
+  return (
+    'Estimate the calories and macros for this meal. Return raw JSON matching the schema. ' +
+    `Write meal_name, every item name and likely_hidden_ingredients in ${LANGUAGE_NAMES[language]}.`
+  );
+}

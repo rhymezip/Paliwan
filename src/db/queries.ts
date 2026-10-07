@@ -5,6 +5,9 @@ import { macroTargets } from '@/logic/macros';
 import type {
   Confidence,
   DailyTarget,
+  Goal,
+  SportId,
+  TrainingLoad,
   MeasureUnit,
   Meal,
   MealItem,
@@ -19,16 +22,18 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 interface ProfileRow {
+  name: string;
   sex: string;
   age: number;
   height_cm: number;
   weight_kg: number;
+  sport: string;
+  /** Holds the training load since schema v2. */
   activity_level: string;
   goal: string;
   target_calories: number;
-  protein_pct: number;
-  carbs_pct: number;
-  fat_pct: number;
+  water_goal_ml: number;
+  step_goal: number;
   units: string;
   onboarded_at: string;
 }
@@ -71,19 +76,44 @@ interface DailyTargetRow {
 /* Mappers                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/** v1 activity levels and goals, mapped onto the v2 training loads and goals. */
+const LEGACY_LOAD: Record<string, TrainingLoad> = {
+  sedentary: 'light',
+  light: 'light',
+  moderate: 'moderate',
+  active: 'high',
+  very_active: 'very_high',
+  high: 'high',
+  very_high: 'very_high',
+};
+
+const LEGACY_GOAL: Record<string, Goal> = {
+  maintain: 'perform',
+  gain: 'grow',
+  lose: 'lose',
+  perform: 'perform',
+  grow: 'grow',
+};
+
+const SPORT_IDS: readonly SportId[] = [
+  'football', 'wrestling', 'boxing', 'judo', 'swimming', 'athletics',
+  'basketball', 'volleyball', 'gymnastics', 'tennis', 'cycling', 'other',
+];
+
 function toProfile(row: ProfileRow): Profile {
   return {
-    sex: row.sex as Profile['sex'],
+    name: row.name,
+    sex: row.sex === 'female' ? 'female' : 'male',
     age: row.age,
     heightCm: row.height_cm,
     weightKg: row.weight_kg,
-    activityLevel: row.activity_level as Profile['activityLevel'],
-    goal: row.goal as Profile['goal'],
+    sport: SPORT_IDS.includes(row.sport as SportId) ? (row.sport as SportId) : 'other',
+    trainingLoad: LEGACY_LOAD[row.activity_level] ?? 'moderate',
+    goal: LEGACY_GOAL[row.goal] ?? 'perform',
     targetCalories: row.target_calories,
-    proteinPct: row.protein_pct,
-    carbsPct: row.carbs_pct,
-    fatPct: row.fat_pct,
-    units: row.units as Profile['units'],
+    waterGoalMl: row.water_goal_ml,
+    stepGoal: row.step_goal,
+    units: row.units === 'imperial' ? 'imperial' : 'metric',
     onboardedAt: row.onboarded_at,
   };
 }
@@ -140,34 +170,38 @@ export async function getProfile(): Promise<Profile | null> {
 }
 
 export async function saveProfile(profile: Profile): Promise<void> {
+  // The v1 percentage columns are unused since macros moved to g/kg; they keep
+  // their defaults.
   await db().runAsync(
     `INSERT INTO profile (
-       id, sex, age, height_cm, weight_kg, activity_level, goal,
-       target_calories, protein_pct, carbs_pct, fat_pct, units, onboarded_at
-     ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       id, name, sex, age, height_cm, weight_kg, sport, activity_level, goal,
+       target_calories, water_goal_ml, step_goal, units, onboarded_at
+     ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
        sex = excluded.sex,
        age = excluded.age,
        height_cm = excluded.height_cm,
        weight_kg = excluded.weight_kg,
+       sport = excluded.sport,
        activity_level = excluded.activity_level,
        goal = excluded.goal,
        target_calories = excluded.target_calories,
-       protein_pct = excluded.protein_pct,
-       carbs_pct = excluded.carbs_pct,
-       fat_pct = excluded.fat_pct,
+       water_goal_ml = excluded.water_goal_ml,
+       step_goal = excluded.step_goal,
        units = excluded.units`,
     [
+      profile.name,
       profile.sex,
       profile.age,
       profile.heightCm,
       profile.weightKg,
-      profile.activityLevel,
+      profile.sport,
+      profile.trainingLoad,
       profile.goal,
       profile.targetCalories,
-      profile.proteinPct,
-      profile.carbsPct,
-      profile.fatPct,
+      profile.waterGoalMl,
+      profile.stepGoal,
       profile.units,
       profile.onboardedAt,
     ],
@@ -199,11 +233,7 @@ export async function ensureDailyTarget(
   const existing = await getDailyTarget(localDate);
   if (existing) return existing;
 
-  const macros = macroTargets(profile.targetCalories, {
-    proteinPct: profile.proteinPct,
-    carbsPct: profile.carbsPct,
-    fatPct: profile.fatPct,
-  });
+  const macros = macroTargets(profile.targetCalories, profile.weightKg);
   const target: DailyTarget = {
     localDate,
     targetCalories: profile.targetCalories,

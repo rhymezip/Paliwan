@@ -1,252 +1,229 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
+import { Pressable, View } from 'react-native';
 
-import { hasApiKey } from '@/api/keyStore';
-import { Card } from '@/components/Card';
-import { CountingNumber } from '@/components/CountingNumber';
-import { DateStrip } from '@/components/DateStrip';
-import { DayRail } from '@/components/DayRail';
-import { EmptyState } from '@/components/EmptyState';
-import { Fab } from '@/components/Fab';
-import { MacroBars } from '@/components/MacroBars';
-import { MealRow } from '@/components/MealRow';
-import { Body, Caption, ScreenTitle, SectionLabel } from '@/components/Type';
-import { useToast } from '@/components/Toast';
-import {
-  color,
-  layout,
-  opacity,
-  radius,
-  space,
-} from '@/constants/theme';
-import { friendlyDate, isToday } from '@/logic/dates';
-import { roundCalories } from '@/logic/scaling';
-import { useDayStore } from '@/store/dayStore';
-import { brand } from '@/constants/brand';
+import { StatTile } from '@/components/home/StatTile';
+import { StepsHero } from '@/components/home/StepsHero';
+import { useTodayFood } from '@/components/home/useTodayFood';
+import { WorkoutCard } from '@/components/home/WorkoutCard';
+import { programById } from '@/data/programs';
+import { tipForDate } from '@/data/tips';
+import { useI18n } from '@/i18n';
+import { localDateString } from '@/logic/dates';
+import { stepsToKcal } from '@/logic/steps';
+import { todayWaterGoalMl } from '@/logic/water';
+import { activitiesOn, totalsFor, useActivityStore } from '@/store/activityStore';
+import { useProfileStore } from '@/store/profileStore';
+import { completedSessions, nextSessionIndex, useProgramStore } from '@/store/programStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useStepStore } from '@/store/stepStore';
+import { useWaterStore } from '@/store/waterStore';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
+import { Icon } from '@/ui/Icon';
+import { Avatar } from '@/ui/misc';
+import { Screen } from '@/ui/Screen';
+import { Text } from '@/ui/Text';
+import { useToast } from '@/ui/Toast';
 
-export default function TodayScreen() {
+const QUICK_WATER_ML = 250;
+
+function greetingFor(hour: number): 'greetingMorning' | 'greetingDay' | 'greetingEvening' {
+  if (hour < 12) return 'greetingMorning';
+  if (hour < 18) return 'greetingDay';
+  return 'greetingEvening';
+}
+
+export default function HomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useStyles();
   const toast = useToast();
-  const params = useLocalSearchParams<{ savedMealId?: string }>();
+  const { tr, f, pick, longDate } = useI18n();
 
-  const {
-    selectedDate,
-    loading,
-    meals,
-    target,
-    consumed,
-    loggedDates,
-    selectDate,
-    refresh,
-    removeMeal,
-    undoRemove,
-  } = useDayStore();
+  const profile = useProfileStore((state) => state.profile);
+  const activeProgramId = useSettingsStore((state) => state.activeProgramId);
+  const water = useWaterStore();
+  const activities = useActivityStore();
+  const steps = useStepStore();
+  const completions = useProgramStore((state) => state.completions);
+  const loadCompletions = useProgramStore((state) => state.load);
+  const eaten = useTodayFood();
 
-  const [keyMissing, setKeyMissing] = useState(false);
-  const [highlightMealId, setHighlightMealId] = useState<string | null>(null);
+  const today = localDateString();
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-      void hasApiKey().then((present) => setKeyMissing(!present));
-    }, [refresh]),
+      void useWaterStore.getState().load().catch(() => undefined);
+      void useActivityStore.getState().load().catch(() => undefined);
+      void loadCompletions().catch(() => undefined);
+      let stopLive = () => undefined as void;
+      void useStepStore
+        .getState()
+        .refresh()
+        .then(() => {
+          stopLive = useStepStore.getState().startLive();
+        });
+      return () => stopLive();
+    }, [loadCompletions]),
   );
 
-  // A meal saved from the review flow arrives as a route param; highlight its
-  // new segment for the entering animation, then clear so revisits don't replay.
-  useEffect(() => {
-    if (params.savedMealId) {
-      setHighlightMealId(params.savedMealId);
-      const timer = setTimeout(() => setHighlightMealId(null), 800);
-      return () => clearTimeout(timer);
+  const todayActivity = useMemo(
+    () => totalsFor(activitiesOn(activities.week, today)),
+    [activities.week, today],
+  );
+
+  if (!profile) return <Screen tabBarSpace />;
+
+  const program = activeProgramId ? programById(activeProgramId) : undefined;
+  const sessionIndex = program ? nextSessionIndex(completions, program.id) : null;
+  const waterGoal = todayWaterGoalMl(profile.waterGoalMl, todayActivity.minutes);
+  const stepKcal = steps.permission === 'granted'
+    ? stepsToKcal(steps.today, profile.weightKg, profile.heightCm, profile.sex)
+    : 0;
+  const burned = Math.round(todayActivity.kcal + stepKcal);
+  const hour = new Date().getHours();
+
+  const drink = async () => {
+    try {
+      await water.add(QUICK_WATER_ML);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.show({ message: f(tr.toast.waterAdded, { ml: QUICK_WATER_ML }), tone: 'success' });
+    } catch {
+      toast.show({ message: tr.common.errorGeneric, tone: 'error' });
     }
-    return undefined;
-  }, [params.savedMealId]);
-
-  const targetCalories = target?.targetCalories ?? 0;
-  const remaining = targetCalories - roundCalories(consumed.calories);
-  const isOver = remaining < 0;
-
-  const onDelete = (mealId: string) => {
-    void removeMeal(mealId);
-    toast.show({
-      message: 'Meal removed.',
-      actionLabel: 'Undo',
-      onAction: () => void undoRemove(),
-      durationMs: 5_000,
-    });
   };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + space.sm, paddingBottom: space.xxxl * 2 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <ScreenTitle>{friendlyDate(selectedDate)}</ScreenTitle>
-          <Pressable
-            onPress={() => router.push('/debug/tokens')}
-            onLongPress={() => router.push('/debug/tokens')}
-            accessibilityRole="button"
-            accessibilityLabel="Design tokens"
-            style={styles.brandButton}
-          >
-            <Image source={brand.logo} style={styles.headerLogo} resizeMode="contain" />
-          </Pressable>
+    <Screen tabBarSpace>
+      <View style={styles.header}>
+        <View style={styles.flex}>
+          <Text variant="caption" tone="muted">
+            {longDate(today)}
+          </Text>
+          <Text variant="title" numberOfLines={1}>
+            {f(tr.home[greetingFor(hour)], { name: profile.name })}
+          </Text>
         </View>
+        <Pressable onPress={() => router.navigate('/(tabs)/profile')} accessibilityRole="button" accessibilityLabel={tr.tabs.profile}>
+          <Avatar name={profile.name} />
+        </Pressable>
+      </View>
 
-        <DateStrip
-          selectedDate={selectedDate}
-          loggedDates={loggedDates}
-          onSelect={(date) => void selectDate(date)}
-        />
+      <View style={styles.streak}>
+        <Icon name="fire" size={18} color={activities.streak > 0 ? theme.colors.steps : theme.colors.textFaint} />
+        <Text variant="label" tone={activities.streak > 0 ? 'default' : 'muted'}>
+          {activities.streak > 0 ? f(tr.home.streak, { n: activities.streak }) : tr.home.streakZero}
+        </Text>
+      </View>
 
-        <View style={styles.hero}>
-          <SectionLabel muted>
-            {isOver ? 'Over target' : 'Remaining today'}
-          </SectionLabel>
-          <CountingNumber
-            value={Math.abs(remaining)}
-            dimmed={isOver}
-            accessibilityLabel={
-              isOver
-                ? `${Math.abs(remaining)} calories over target`
-                : `${remaining} calories remaining`
-            }
-          />
-          {isOver ? (
-            <Caption muted numeric>
-              {Math.abs(remaining)} over — a fact, not a verdict.
-            </Caption>
-          ) : (
-            <Caption muted numeric>
-              of {targetCalories} target
-            </Caption>
-          )}
-        </View>
+      <StepsHero
+        profile={profile}
+        steps={steps.today}
+        permission={steps.permission}
+        onPress={() => router.push('/steps')}
+      />
 
-        <DayRail
-          meals={meals}
-          targetCalories={targetCalories}
-          highlightMealId={highlightMealId}
-          onSelectMeal={(mealId) => scrollToMeal(mealId)}
-        />
-
-        {target ? (
-          <View style={styles.macros}>
-            <MacroBars
-              consumed={consumed}
-              targetProteinG={target.proteinG}
-              targetCarbsG={target.carbsG}
-              targetFatG={target.fatG}
+      <View style={styles.row}>
+        <StatTile
+          label={tr.home.water}
+          value={`${water.totalMl}`}
+          caption={`/ ${waterGoal} ${tr.common.ml}`}
+          icon="cup-water"
+          color={theme.colors.water}
+          progress={water.totalMl / waterGoal}
+          onPress={() => router.push('/water')}
+          footer={
+            <Button
+              label={f(tr.home.addWater, { ml: QUICK_WATER_ML })}
+              size="sm"
+              variant="secondary"
+              icon="plus"
+              onPress={() => void drink()}
             />
-          </View>
-        ) : null}
-
-        {keyMissing ? (
-          <Pressable
-            onPress={() => router.push('/(tabs)/settings')}
-            accessibilityRole="button"
-            accessibilityLabel="Gemini açary ýok. Goşmak üçin sazlamalary aç."
-            style={({ pressed }) => [
-              styles.banner,
-              pressed && { opacity: opacity.pressed },
-            ]}
-          >
-            <Body>Gemini açary ýok. Häzir el bilen ýazylýar.</Body>
-            <Caption muted>Suratdan analiz üçin Sazlamalarda açar goşuň.</Caption>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.list}>
-          <SectionLabel muted style={styles.listLabel}>
-            {isToday(selectedDate) ? 'Today’s meals' : 'Meals'}
-          </SectionLabel>
-
-          {loading && meals.length === 0 ? null : meals.length === 0 ? (
-            <Card>
-              <EmptyState
-                title="Nothing logged yet"
-                detail="Photograph your first meal to start the day."
-                actionLabel="Take a photo"
-                onAction={() => router.push('/capture')}
-              />
-            </Card>
-          ) : (
-            <Card padded={false}>
-              {meals.map((meal, index) => (
-                <View key={meal.id}>
-                  {index > 0 ? <View style={styles.divider} /> : null}
-                  <MealRow
-                    meal={meal}
-                    onDelete={onDelete}
-                    onPress={() => scrollToMeal(meal.id)}
-                  />
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
-      </ScrollView>
-
-      <View style={[styles.fab, { bottom: insets.bottom + space.base }]}>
-        <Fab
-          onPress={() => router.push('/capture')}
-          onSecondary={() => router.push('/manual')}
+          }
+        />
+        <StatTile
+          label={tr.home.eaten}
+          value={`${Math.round(eaten.calories)}`}
+          caption={`/ ${profile.targetCalories} ${tr.common.kcal}`}
+          icon="food-apple"
+          color={theme.colors.food}
+          progress={eaten.calories / profile.targetCalories}
+          onPress={() => router.navigate('/(tabs)/food')}
         />
       </View>
-    </View>
+
+      <View style={styles.row}>
+        <StatTile
+          label={tr.home.active}
+          value={f(tr.home.minutes, { n: Math.round(todayActivity.minutes) })}
+          caption={tr.common.today}
+          icon="timer-outline"
+          color={theme.colors.activity}
+          onPress={() => router.navigate('/(tabs)/train')}
+        />
+        <StatTile
+          label={tr.home.burned}
+          value={`${burned}`}
+          caption={tr.common.kcal}
+          icon="fire"
+          color={theme.colors.steps}
+          onPress={() => router.navigate('/(tabs)/train')}
+        />
+      </View>
+
+      <WorkoutCard
+        program={program}
+        sessionIndex={sessionIndex}
+        completedCount={program ? completedSessions(completions, program.id).size : 0}
+        onStart={() =>
+          program &&
+          router.push({ pathname: '/workout/[programId]', params: { programId: program.id } })
+        }
+        onChoose={() => router.navigate('/(tabs)/train')}
+      />
+
+      <Card style={styles.tip}>
+        <View style={styles.tipIcon}>
+          <Icon name="lightbulb-on-outline" size={22} color={theme.colors.warning} />
+        </View>
+        <View style={styles.flex}>
+          <Text variant="overline" tone="muted">
+            {tr.home.tip}
+          </Text>
+          <Text variant="bodyStrong">{pick(tipForDate(today))}</Text>
+        </View>
+      </Card>
+    </Screen>
   );
 }
 
-// The rail's tap-to-meal is a nicety; a full scroll-to would need row layout
-// measurement. For now, selecting a segment is acknowledged silently — the row
-// list is short enough to be on screen already.
-function scrollToMeal(_mealId: string): void {}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.ground },
-  content: {
-    paddingHorizontal: layout.screenGutter,
-    gap: space.lg,
-  },
-  header: {
+const useStyles = makeStyles((t) => ({
+  header: { flexDirection: 'row', alignItems: 'center', gap: t.space.md, marginTop: t.space.sm },
+  flex: { flex: 1, gap: t.space.xxs },
+  streak: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    alignSelf: 'flex-start',
+    gap: t.space.xs,
+    paddingHorizontal: t.space.md,
+    paddingVertical: t.space.xs,
+    borderRadius: t.radius.full,
+    backgroundColor: t.colors.surface,
+    borderWidth: 1,
+    borderColor: t.colors.border,
   },
-  brandButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: color.surface,
+  row: { flexDirection: 'row', gap: t.space.md },
+  tip: { flexDirection: 'row', gap: t.space.md, alignItems: 'center' },
+  tipIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: t.radius.md,
+    backgroundColor: t.colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerLogo: { width: 30, height: 30 },
-  hero: { alignItems: 'center', gap: space.xs },
-  macros: {},
-  banner: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: color.line,
-    padding: layout.cardPadding,
-    gap: space.xs,
-  },
-  list: { gap: space.sm },
-  listLabel: { marginLeft: space.xs },
-  divider: {
-    height: 1,
-    backgroundColor: color.line,
-    marginLeft: layout.cardPadding + 44 + space.md,
-  },
-  fab: { position: 'absolute', right: layout.screenGutter },
-});
+}));

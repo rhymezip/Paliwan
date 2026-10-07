@@ -61,12 +61,73 @@ CREATE TABLE daily_targets (
 );
 `;
 
-export const MIGRATIONS: readonly string[] = [INITIAL_SCHEMA];
+/**
+ * v2 — the fitness redesign. Additive only: old meals and targets are kept.
+ * The existing `activity_level` column now holds the training load and `goal`
+ * the new goal; old values are mapped when read (see `toProfile`).
+ */
+const FITNESS_SCHEMA = `
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+ALTER TABLE profile ADD COLUMN name TEXT NOT NULL DEFAULT '';
+ALTER TABLE profile ADD COLUMN sport TEXT NOT NULL DEFAULT 'other';
+ALTER TABLE profile ADD COLUMN water_goal_ml INTEGER NOT NULL DEFAULT 2000;
+ALTER TABLE profile ADD COLUMN step_goal INTEGER NOT NULL DEFAULT 10000;
+
+CREATE TABLE water_logs (
+  id TEXT PRIMARY KEY,
+  logged_at TEXT NOT NULL,
+  local_date TEXT NOT NULL,
+  amount_ml INTEGER NOT NULL
+);
+
+CREATE INDEX idx_water_date ON water_logs(local_date);
+
+CREATE TABLE activities (
+  id TEXT PRIMARY KEY,
+  local_date TEXT NOT NULL,
+  logged_at TEXT NOT NULL,
+  type TEXT NOT NULL,
+  duration_min REAL NOT NULL,
+  intensity TEXT NOT NULL,
+  kcal REAL NOT NULL,
+  source TEXT NOT NULL,
+  program_id TEXT
+);
+
+CREATE INDEX idx_activities_date ON activities(local_date);
+
+CREATE TABLE workout_completions (
+  id TEXT PRIMARY KEY,
+  program_id TEXT NOT NULL,
+  session_index INTEGER NOT NULL,
+  completed_at TEXT NOT NULL,
+  activity_id TEXT
+);
+
+CREATE INDEX idx_completions_program ON workout_completions(program_id);
+
+CREATE TABLE step_days (
+  local_date TEXT PRIMARY KEY,
+  steps INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`;
+
+export const MIGRATIONS: readonly string[] = [INITIAL_SCHEMA, FITNESS_SCHEMA];
 
 export const LATEST_VERSION = MIGRATIONS.length;
 
-/** Drops every table. Used by "Delete all data" and by the debug reset helper. */
+/** Drops every table. Used by "Delete all data". */
 export const DROP_ALL = `
+DROP TABLE IF EXISTS settings;
+DROP TABLE IF EXISTS water_logs;
+DROP TABLE IF EXISTS activities;
+DROP TABLE IF EXISTS workout_completions;
+DROP TABLE IF EXISTS step_days;
 DROP TABLE IF EXISTS meal_items;
 DROP TABLE IF EXISTS meals;
 DROP TABLE IF EXISTS daily_targets;

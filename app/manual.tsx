@@ -1,35 +1,36 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image, Pressable, View } from 'react-native';
 
-import { Button } from '@/components/Button';
-import { Segmented } from '@/components/Choice';
-import { Field } from '@/components/Field';
-import { Caption, ScreenTitle, SectionLabel } from '@/components/Type';
-import { useToast } from '@/components/Toast';
-import { color, layout, opacity, radius, space } from '@/constants/theme';
-import { MEASURE_UNITS, MEAL_TYPES } from '@/types';
-import { localDateString, mealTypeForTime } from '@/logic/dates';
 import type { NewMeal } from '@/db/queries';
+import { useI18n } from '@/i18n';
+import { localDateString, mealTypeForTime } from '@/logic/dates';
+import { deletePhoto } from '@/media/photos';
 import { useCaptureStore } from '@/store/captureStore';
 import { useDayStore } from '@/store/dayStore';
-import type { MeasureUnit, MealType } from '@/types';
+import { makeStyles } from '@/theme/ThemeProvider';
+import { MEASURE_UNITS, MEAL_TYPES, type MealType, type MeasureUnit } from '@/types';
+import { Button } from '@/ui/Button';
+import { Field } from '@/ui/Field';
+import { SectionHeader } from '@/ui/misc';
+import { Screen } from '@/ui/Screen';
+import { Segmented } from '@/ui/Segmented';
+import { Text } from '@/ui/Text';
+import { useToast } from '@/ui/Toast';
 
-const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((type) => ({
-  value: type,
-  label: type.charAt(0).toUpperCase() + type.slice(1),
-}));
-
+function parse(value: string): number {
+  const parsed = Number.parseFloat(value.replace(',', '.'));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
 
 export default function ManualScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const styles = useStyles();
   const toast = useToast();
+  const { tr } = useI18n();
 
-  // A photo is only present when manual entry was reached from a failed
-  // estimate. A meal entered from the FAB has none.
+  // A photo is present only when manual entry came from a failed or keyless estimate.
   const { photoUri, clear } = useCaptureStore();
   const addMeal = useDayStore((state) => state.addMeal);
 
@@ -43,21 +44,22 @@ export default function ManualScreen() {
   const [mealType, setMealType] = useState<MealType>(mealTypeForTime());
   const [saving, setSaving] = useState(false);
 
-  const kcal = Number.parseFloat(calories);
+  const kcal = Number.parseFloat(calories.replace(',', '.'));
   const valid = name.trim().length > 0 && Number.isFinite(kcal) && kcal >= 0;
 
-  const num = (value: string) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  const cancel = () => {
+    // The photo was only kept for this meal; without it, it is an orphan file.
+    deletePhoto(photoUri);
+    clear();
+    router.back();
   };
 
   const save = async () => {
     if (!valid) return;
     setSaving(true);
-    const localDate = localDateString();
     const meal: NewMeal = {
       loggedAt: new Date().toISOString(),
-      localDate,
+      localDate: localDateString(),
       mealType,
       name: name.trim(),
       photoUri,
@@ -66,154 +68,108 @@ export default function ManualScreen() {
       items: [
         {
           name: name.trim(),
-          quantity: num(quantity) || 1,
+          quantity: parse(quantity) || 1,
           unit,
-          calories: num(calories),
-          proteinG: num(protein),
-          carbsG: num(carbs),
-          fatG: num(fat),
+          calories: parse(calories),
+          proteinG: parse(protein),
+          carbsG: parse(carbs),
+          fatG: parse(fat),
           isManualAddition: false,
         },
       ],
     };
-    const stored = await addMeal(meal);
-    clear();
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    toast.show({ message: 'Meal saved.' });
-    router.dismissAll();
-    router.replace({ pathname: '/(tabs)', params: { savedMealId: stored.id } });
+    try {
+      await addMeal(meal);
+      clear();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.show({ message: tr.toast.mealSaved, tone: 'success' });
+      router.back();
+    } catch {
+      setSaving(false);
+      toast.show({ message: tr.common.errorGeneric, tone: 'error' });
+    }
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <ScreenTitle>Enter a meal</ScreenTitle>
-        <Button label="Cancel" variant="ghost" block={false} onPress={() => router.back()} />
-      </View>
+    <Screen
+      onBack={cancel}
+      backIcon="close"
+      title={tr.manual.title}
+      footer={<Button label={tr.manual.save} icon="check" onPress={() => void save()} disabled={!valid} loading={saving} />}
+    >
+      {photoUri ? <Image source={{ uri: photoUri }} style={styles.photo} /> : null}
 
-      <View style={styles.body}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.photo} />
-        ) : null}
+      <Field label={tr.manual.name} value={name} onChangeText={setName} placeholder={tr.manual.namePlaceholder} autoFocus />
 
-        <Field value={name} onChangeText={setName} label="Name" placeholder="Chicken salad" autoFocus />
-
-        <Field
-          value={quantity}
-          onChangeText={setQuantity}
-          label="Quantity"
-          keyboardType="decimal-pad"
-          numeric
-        />
-
-        <View>
-          <SectionLabel muted style={styles.unitLabel}>
-            Unit
-          </SectionLabel>
-          <View style={styles.units}>
-            {MEASURE_UNITS.map((option) => {
-              const selected = option === unit;
-              return (
-                <Pressable
-                  key={option}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    setUnit(option);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={option}
-                  accessibilityState={{ selected }}
-                  style={({ pressed }) => [
-                    styles.unitChip,
-                    selected && styles.unitChipOn,
-                    pressed && { opacity: opacity.pressed },
-                  ]}
-                >
-                  <Caption muted={!selected} style={selected ? styles.unitChipTextOn : undefined}>
-                    {option}
-                  </Caption>
-                </Pressable>
-              );
-            })}
-          </View>
+      <View style={styles.row}>
+        <View style={styles.flex}>
+          <Field label={tr.manual.quantity} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" numeric />
         </View>
-
-        <Field
-          value={calories}
-          onChangeText={setCalories}
-          label="Calories"
-          keyboardType="number-pad"
-          suffix="kcal"
-          numeric
-        />
-
-        <SectionLabel muted style={styles.macrosLabel}>
-          Macros (optional)
-        </SectionLabel>
-        <View style={styles.macros}>
-          <Field style={styles.macroField} value={protein} onChangeText={setProtein} keyboardType="decimal-pad" suffix="P g" numeric />
-          <Field style={styles.macroField} value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" suffix="C g" numeric />
-          <Field style={styles.macroField} value={fat} onChangeText={setFat} keyboardType="decimal-pad" suffix="F g" numeric />
-        </View>
-
-        <View style={styles.mealType}>
-          <SectionLabel muted style={styles.mealTypeLabel}>
-            Meal
-          </SectionLabel>
-          <Segmented options={MEAL_TYPE_OPTIONS} value={mealType} onChange={setMealType} />
+        <View style={styles.flex}>
+          <Field
+            label={tr.manual.calories}
+            value={calories}
+            onChangeText={setCalories}
+            keyboardType="decimal-pad"
+            numeric
+            suffix={tr.common.kcal}
+          />
         </View>
       </View>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + space.sm }]}>
-        <Button label="Save meal" onPress={() => void save()} disabled={!valid} loading={saving} />
+      <SectionHeader title={tr.manual.unit} />
+      <View style={styles.units}>
+        {MEASURE_UNITS.map((option) => {
+          const selected = option === unit;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => setUnit(option)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              style={[styles.unit, selected && styles.unitSelected]}
+            >
+              <Text variant="label" tone={selected ? 'onPrimary' : 'default'}>
+                {tr.measureUnit[option]}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
-    </View>
+
+      <SectionHeader title={tr.manual.macros} />
+      <View style={styles.row}>
+        <View style={styles.flex}>
+          <Field label={tr.manual.protein} value={protein} onChangeText={setProtein} keyboardType="decimal-pad" numeric />
+        </View>
+        <View style={styles.flex}>
+          <Field label={tr.manual.carbs} value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" numeric />
+        </View>
+        <View style={styles.flex}>
+          <Field label={tr.manual.fat} value={fat} onChangeText={setFat} keyboardType="decimal-pad" numeric />
+        </View>
+      </View>
+
+      <SectionHeader title={tr.manual.meal} />
+      <Segmented
+        value={mealType}
+        onChange={setMealType}
+        options={MEAL_TYPES.map((type) => ({ value: type, label: tr.mealType[type] }))}
+      />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.ground },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: layout.screenGutter,
-    paddingRight: space.sm,
-    paddingTop: space.sm,
+const useStyles = makeStyles((t) => ({
+  photo: { width: '100%', height: 170, borderRadius: t.radius.lg },
+  row: { flexDirection: 'row', gap: t.space.sm },
+  flex: { flex: 1 },
+  units: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm },
+  unit: {
+    paddingHorizontal: t.space.md,
+    paddingVertical: t.space.sm,
+    borderRadius: t.radius.full,
+    backgroundColor: t.colors.surfaceAlt,
   },
-  body: {
-    flex: 1,
-    paddingHorizontal: layout.screenGutter,
-    paddingTop: space.base,
-    gap: space.base,
-  },
-  photo: {
-    width: '100%',
-    height: 160,
-    borderRadius: radius.card,
-  },
-  unitLabel: { marginBottom: space.sm, marginLeft: space.xs },
-  units: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  unitChip: {
-    minHeight: 36,
-    paddingHorizontal: space.md,
-    justifyContent: 'center',
-    borderRadius: radius.input,
-    borderWidth: 1,
-    borderColor: color.line,
-    backgroundColor: color.surface,
-  },
-  unitChipOn: { backgroundColor: color.ink, borderColor: color.ink },
-  unitChipTextOn: { color: color.surface },
-  macrosLabel: { marginTop: space.xs },
-  macros: { flexDirection: 'row', gap: space.sm },
-  macroField: { flex: 1 },
-  mealType: { gap: space.sm, marginTop: space.xs },
-  mealTypeLabel: { marginLeft: space.xs },
-  footer: {
-    paddingHorizontal: layout.screenGutter,
-    paddingTop: space.sm,
-    borderTopWidth: 1,
-    borderTopColor: color.line,
-  },
-});
+  unitSelected: { backgroundColor: t.colors.primary },
+}));

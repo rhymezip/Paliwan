@@ -1,15 +1,15 @@
-import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 
 import { looksLikeApiKey, setApiKey } from '@/api/keyStore';
-import { VisionError, verifyApiKey } from '@/api/vision';
-import { Button } from '@/components/Button';
-import { Field } from '@/components/Field';
-import { Body, Caption } from '@/components/Type';
-import { color, opacity, space } from '@/constants/theme';
-import { brand } from '@/constants/brand';
+import { copyForError, verifyApiKey } from '@/api/vision';
+import { useI18n } from '@/i18n';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { Button } from '@/ui/Button';
+import { Field } from '@/ui/Field';
+import { Icon } from '@/ui/Icon';
+import { Text } from '@/ui/Text';
 
 const GEMINI_CONSOLE_URL = 'https://aistudio.google.com/apikey';
 
@@ -19,20 +19,18 @@ type TestState =
   | { status: 'passed' }
   | { status: 'failed'; message: string };
 
-interface Props {
-  /** Called once a key has been stored, whether or not it was tested. */
-  onSaved: () => void;
-  saveLabel?: string;
-}
-
 /**
- * Key entry, shared by onboarding and Settings. The key goes straight to
- * `keyStore` and is never lifted into component state beyond this form.
+ * Key entry for Profile. The key goes straight to `keyStore` and is never lifted
+ * into component state beyond this form.
  */
-export function ApiKeyForm({ onSaved, saveLabel = 'Açary sakla' }: Props) {
+export function ApiKeyForm({ onSaved }: { onSaved: () => void }) {
+  const theme = useTheme();
+  const styles = useStyles();
+  const { tr } = useI18n();
   const [value, setValue] = useState('');
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [helpOpen, setHelpOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const shaped = looksLikeApiKey(value);
 
@@ -45,119 +43,100 @@ export function ApiKeyForm({ onSaved, saveLabel = 'Açary sakla' }: Props) {
       setTest({ status: 'passed' });
     } catch (error) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      // Surface the underlying cause instead of one blanket message — the kind
-      // and the raw error tell network apart from timeout apart from a bad key.
-      const kind = error instanceof VisionError ? error.kind : 'unknown';
-      const detail =
-        error instanceof Error ? error.message : String(error);
-      setTest({
-        status: 'failed',
-        message:
-          kind === 'unauthorized'
-            ? 'That key was rejected. Check you copied all of it.'
-            : kind === 'billing'
-              ? 'The key works, but Google AI Studio is limiting this request. Check your project quota or billing.'
-              : `Test failed — kind: ${kind}. ${detail}`,
-      });
+      const copy = copyForError(tr, error);
+      setTest({ status: 'failed', message: `${copy.title}. ${copy.detail}` });
     }
   };
 
   const save = async () => {
-    await setApiKey(value);
-    onSaved();
+    setSaving(true);
+    try {
+      await setApiKey(value);
+      onSaved();
+    } catch {
+      setTest({ status: 'failed', message: tr.common.errorGeneric });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <View style={styles.root}>
       <Field
+        label={tr.apiKey.label}
         value={value}
         onChangeText={(next) => {
           setValue(next);
           setTest({ status: 'idle' });
         }}
-        label="Gemini API açary"
-        placeholder="AIza… or AQ.…"
+        placeholder={tr.apiKey.placeholder}
         secureTextEntry
-        autoFocus
-        hint={
-          shaped || value.length === 0
-            ? 'Google Gemini key. Stored securely on this phone; it is only used for your direct photo analysis request.'
-            : undefined
-        }
-        error={
-          value.length > 0 && !shaped
-            ? 'That doesn’t look like a Google AI Studio key.'
-            : undefined
-        }
+        autoCapitalize="none"
+        autoCorrect={false}
+        hint={tr.apiKey.help}
+        error={value.length > 0 && !shaped ? tr.apiKey.invalidFormat : undefined}
       />
 
       <Pressable
         onPress={() => setHelpOpen((open) => !open)}
         accessibilityRole="button"
-        accessibilityLabel="Açary nireden almaly?"
         accessibilityState={{ expanded: helpOpen }}
-        style={({ pressed }) => [
-          styles.help,
-          pressed && { opacity: opacity.pressed },
-        ]}
+        style={styles.help}
       >
-        <Body>Açary nireden almaly?</Body>
-        <Feather
-          name={helpOpen ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color={color.muted}
-        />
+        <Text variant="label" tone="primary">
+          {tr.apiKey.where}
+        </Text>
+        <Icon name={helpOpen ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.primary} />
       </Pressable>
-
       {helpOpen ? (
-        <View style={styles.helpBody}>
-          <Body muted>
-            Create a Google AI Studio key, copy it once, and paste it here. {brand.name}
-            sends the photo directly to Gemini; there is no {brand.name} server in
-            between. Your key stays in secure device storage.
-          </Body>
+        <View style={styles.steps}>
+          {tr.apiKey.steps.map((step, index) => (
+            <Text key={step} tone="muted">
+              {index + 1}. {step}
+            </Text>
+          ))}
           <Button
-            label="Google AI Studio-ny aç"
+            label="aistudio.google.com"
+            icon="open-in-new"
             variant="secondary"
+            size="sm"
             onPress={() => void Linking.openURL(GEMINI_CONSOLE_URL)}
           />
         </View>
       ) : null}
 
       {test.status === 'passed' ? (
-          <Caption style={styles.passed}>Açar işleýär.</Caption>
+        <Text variant="label" color={theme.colors.success}>
+          {tr.apiKey.valid}
+        </Text>
       ) : test.status === 'failed' ? (
-        <Caption style={styles.failed}>{test.message}</Caption>
+        <Text variant="caption" tone="danger">
+          {test.message}
+        </Text>
       ) : null}
 
       <View style={styles.actions}>
         <Button
-          label="Açary barla"
+          label={test.status === 'testing' ? tr.apiKey.testing : tr.apiKey.test}
           variant="secondary"
           onPress={() => void runTest()}
           disabled={!shaped}
           loading={test.status === 'testing'}
         />
         <Button
-          label={saveLabel}
+          label={tr.apiKey.saveKey}
           onPress={() => void save()}
           disabled={!shaped || test.status === 'testing'}
+          loading={saving}
         />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { gap: space.base },
-  help: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  helpBody: { gap: space.md },
-  actions: { gap: space.sm },
-  passed: { color: color.olive },
-  failed: { color: color.paprika },
-});
+const useStyles = makeStyles((t) => ({
+  root: { gap: t.space.md },
+  help: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 },
+  steps: { gap: t.space.sm },
+  actions: { gap: t.space.sm },
+}));

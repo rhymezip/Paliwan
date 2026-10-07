@@ -1,11 +1,12 @@
 import { VisionError } from '@/api/errors';
-import { SYSTEM_PROMPT, USER_PROMPT } from '@/api/prompt';
+import { SYSTEM_PROMPT } from '@/api/prompt';
 
 /**
  * Google Gemini transport.
  *
- * Uses the Generative Language API with the key as a query parameter (the AI
- * Studio style). `gemini-2.5-flash` is chosen because it has vision and
+ * Uses the Generative Language API. The key travels in the `x-goog-api-key`
+ * header rather than the URL, so it never lands in request logs.
+ * `gemini-2.5-flash` is chosen because it has vision and
  * carries a free-tier quota, so the app works without a funded account. The
  * task prompt goes in `systemInstruction`; the image and the per-request ask go
  * in `contents`. `responseMimeType: application/json` makes the model return a
@@ -27,6 +28,7 @@ interface GeminiResponse {
 export async function estimateWithGemini(
   apiKey: string,
   base64Jpeg: string,
+  userPrompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
   const body = {
@@ -36,7 +38,7 @@ export async function estimateWithGemini(
         role: 'user',
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64Jpeg } },
-          { text: USER_PROMPT },
+          { text: userPrompt },
         ],
       },
     ],
@@ -47,7 +49,7 @@ export async function estimateWithGemini(
     },
   };
 
-  const response = await post(`${ENDPOINT}?key=${apiKey}`, body, signal);
+  const response = await post(ENDPOINT, apiKey, body, signal);
   const text = firstPartText(response);
   if (!text) {
     throw new VisionError('malformed', 'The estimate came back empty.');
@@ -64,7 +66,8 @@ export async function verifyGeminiKey(apiKey: string): Promise<void> {
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(`${MODELS_ENDPOINT}?key=${apiKey}`, {
+    response = await fetch(MODELS_ENDPOINT, {
+      headers: { 'x-goog-api-key': apiKey },
       signal: controller.signal,
     });
   } catch {
@@ -81,6 +84,7 @@ export async function verifyGeminiKey(apiKey: string): Promise<void> {
 
 async function post(
   url: string,
+  apiKey: string,
   body: unknown,
   signal: AbortSignal | undefined,
 ): Promise<GeminiResponse> {
@@ -93,7 +97,7 @@ async function post(
   try {
     response = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
