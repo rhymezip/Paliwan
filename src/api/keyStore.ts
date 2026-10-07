@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 /**
  * The only module that touches the Gemini API key.
@@ -22,6 +23,25 @@ import * as SecureStore from 'expo-secure-store';
 
 const STORAGE_KEY = 'gemini_api_key';
 
+interface KeyStorage {
+  getItemAsync(key: string): Promise<string | null>;
+  setItemAsync(key: string, value: string): Promise<void>;
+  deleteItemAsync(key: string): Promise<void>;
+}
+
+/**
+ * `expo-secure-store` has no web implementation, so the web preview keeps the
+ * key in `localStorage`. That is not secure storage — fine for a local preview,
+ * not for a published web build.
+ */
+const webStorage: KeyStorage = {
+  getItemAsync: async (key) => globalThis.localStorage?.getItem(key) ?? null,
+  setItemAsync: async (key, value) => globalThis.localStorage?.setItem(key, value),
+  deleteItemAsync: async (key) => globalThis.localStorage?.removeItem(key),
+};
+
+const storage: KeyStorage = Platform.OS === 'web' ? webStorage : SecureStore;
+
 function bundledDevKey(): string | null {
   const value = Constants.expoConfig?.extra?.['geminiDevApiKey'];
   return typeof value === 'string' && value.trim().length > 0
@@ -43,14 +63,14 @@ export async function seedFromEnvironment(): Promise<void> {
   const devKey = bundledDevKey();
   if (!devKey) return;
 
-  const existing = await SecureStore.getItemAsync(STORAGE_KEY);
+  const existing = await storage.getItemAsync(STORAGE_KEY);
   if (existing !== devKey) {
-    await SecureStore.setItemAsync(STORAGE_KEY, devKey);
+    await storage.setItemAsync(STORAGE_KEY, devKey);
   }
 }
 
 export async function getApiKey(): Promise<string | null> {
-  return SecureStore.getItemAsync(STORAGE_KEY);
+  return storage.getItemAsync(STORAGE_KEY);
 }
 
 export async function hasApiKey(): Promise<boolean> {
@@ -58,11 +78,11 @@ export async function hasApiKey(): Promise<boolean> {
 }
 
 export async function setApiKey(value: string): Promise<void> {
-  await SecureStore.setItemAsync(STORAGE_KEY, value.trim());
+  await storage.setItemAsync(STORAGE_KEY, value.trim());
 }
 
 export async function clearApiKey(): Promise<void> {
-  await SecureStore.deleteItemAsync(STORAGE_KEY);
+  await storage.deleteItemAsync(STORAGE_KEY);
 }
 
 /** `AIza…4f2a` — enough to recognise a key, not enough to use one. */

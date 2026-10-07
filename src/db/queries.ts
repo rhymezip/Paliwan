@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 
-import { db } from '@/db';
+import { db, inTransaction } from '@/db';
 import { macroTargets } from '@/logic/macros';
 import type {
   Confidence,
@@ -293,7 +293,7 @@ export async function restoreMeal(meal: MealWithItems): Promise<void> {
 }
 
 async function writeMeal(meal: MealWithItems): Promise<void> {
-  await db().withExclusiveTransactionAsync(async (txn) => {
+  await inTransaction(db(), async (txn) => {
     await txn.runAsync(
       `INSERT INTO meals
          (id, logged_at, local_date, meal_type, name, photo_uri, source, confidence, created_at)

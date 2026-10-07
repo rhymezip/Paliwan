@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 import { DROP_ALL, LATEST_VERSION, MIGRATIONS } from '@/db/schema';
 
@@ -40,6 +41,21 @@ export function db(): SQLite.SQLiteDatabase {
   return database;
 }
 
+/**
+ * Runs `task` in a transaction. Native gets an exclusive one; expo-sqlite on web
+ * throws on `withExclusiveTransactionAsync`, so the web preview uses a plain one.
+ */
+export async function inTransaction(
+  handle: SQLite.SQLiteDatabase,
+  task: (txn: SQLite.SQLiteDatabase) => Promise<void>,
+): Promise<void> {
+  if (Platform.OS === 'web') {
+    await handle.withTransactionAsync(() => task(handle));
+    return;
+  }
+  await handle.withExclusiveTransactionAsync(task);
+}
+
 async function migrate(handle: SQLite.SQLiteDatabase): Promise<void> {
   const row = await handle.getFirstAsync<{ user_version: number }>(
     'PRAGMA user_version',
@@ -49,7 +65,7 @@ async function migrate(handle: SQLite.SQLiteDatabase): Promise<void> {
   while (version < LATEST_VERSION) {
     const statement = MIGRATIONS[version];
     if (!statement) break;
-    await handle.withExclusiveTransactionAsync(async (txn) => {
+    await inTransaction(handle, async (txn) => {
       await txn.execAsync(statement);
     });
     version += 1;
