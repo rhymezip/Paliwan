@@ -6,17 +6,41 @@ import { SYSTEM_PROMPT } from '@/api/prompt';
  *
  * Uses the Generative Language API. The key travels in the `x-goog-api-key`
  * header rather than the URL, so it never lands in request logs.
- * `gemini-2.5-flash` is chosen because it has vision and
- * carries a free-tier quota, so the app works without a funded account. The
+ * `gemini-3.8-flash` is chosen because it has vision and
+ * carries a free-tier quota, so the app works without a funded account
+ * (`gemini-2.5-flash` is closed to new keys). The
  * task prompt goes in `systemInstruction`; the image and the per-request ask go
  * in `contents`. `responseMimeType: application/json` makes the model return a
  * bare JSON object, which the shared parser then reads.
  */
 
-const MODEL = 'gemini-2.5-flash';
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+/**
+ * Tried in order. Busy models answer 503 ("high demand") at peak times, so a
+ * request that keeps failing that way moves on to the next model instead of
+ * failing the estimate.
+ */
+const MODELS = [
+  { name: 'gemini-3.8-flash', attempts: 2 },
+  { name: 'gemini-3.5-flash', attempts: 2 },
+] as const;
 const MODELS_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TIMEOUT_MS = 30_000;
+const RETRY_DELAY_MS = 700;
+
+function endpointFor(model: string): string {
+  return `${MODELS_ENDPOINT}/${model}:generateContent`;
+}
+
+/** Waits, unless the estimate is cancelled first. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new VisionError('cancelled', 'Estimate cancelled.'));
+    });
+  });
+}
 
 interface GeminiResponse {
   candidates?: {
@@ -45,16 +69,30 @@ export async function estimateWithGemini(
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.2,
-      maxOutputTokens: 1600,
+      maxOutputTokens: 4096,
     },
   };
 
-  const response = await post(ENDPOINT, apiKey, body, signal);
-  const text = firstPartText(response);
-  if (!text) {
-    throw new VisionError('malformed', 'The estimate came back empty.');
+  let lastError: unknown = new VisionError('server', 'The service is unavailable.');
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < model.attempts; attempt += 1) {
+      try {
+        const response = await post(endpointFor(model.name), apiKey, body, signal);
+        const text = firstPartText(response);
+        if (!text) {
+          throw new VisionError('malformed', 'The estimate came back empty.');
+        }
+        return text;
+      } catch (error) {
+        // Only an overloaded or retired model is worth another try; a bad key,
+        // a rate limit or a cancel is the same on every model.
+        if (!(error instanceof VisionError) || error.kind !== 'server') throw error;
+        lastError = error;
+        await pause(RETRY_DELAY_MS * (attempt + 1), signal);
+      }
+    }
   }
-  return text;
+  throw lastError;
 }
 
 /**
@@ -150,6 +188,10 @@ async function errorForResponse(response: Response): Promise<VisionError> {
   }
   if (status >= 500) {
     return new VisionError('server', 'The service is unavailable.');
+  }
+  if (status === 404 || /no longer available|is not found|not supported/i.test(apiMessage)) {
+    // A retired model: let the caller fall through to the next one.
+    return new VisionError('server', apiMessage || 'The model is unavailable.');
   }
   return new VisionError(
     'malformed',

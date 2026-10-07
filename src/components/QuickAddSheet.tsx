@@ -13,6 +13,7 @@ import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
 const QUICK_WATER_ML = 250;
+const SHEET_CLOSE_MS = 350;
 
 export function QuickAddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -23,9 +24,11 @@ export function QuickAddSheet({ visible, onClose }: { visible: boolean; onClose:
   const addWater = useWaterStore((state) => state.add);
   const activeProgramId = useSettingsStore((state) => state.activeProgramId);
 
+  // Navigate once the sheet has gone: iOS will not present a full-screen
+  // screen (camera, workout) while another modal is still animating out.
   const go = (href: Href) => {
     onClose();
-    router.push(href);
+    setTimeout(() => router.push(href), SHEET_CLOSE_MS);
   };
 
   const drink = async () => {

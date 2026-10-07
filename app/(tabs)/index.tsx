@@ -59,14 +59,20 @@ export default function HomeScreen() {
       void useWaterStore.getState().load().catch(() => undefined);
       void useActivityStore.getState().load().catch(() => undefined);
       void loadCompletions().catch(() => undefined);
+      // Only start listening if the screen is still focused when the count arrives;
+      // otherwise every quick visit would leave a listener behind.
+      let active = true;
       let stopLive = () => undefined as void;
       void useStepStore
         .getState()
         .refresh()
         .then(() => {
-          stopLive = useStepStore.getState().startLive();
+          if (active) stopLive = useStepStore.getState().startLive();
         });
-      return () => stopLive();
+      return () => {
+        active = false;
+        stopLive();
+      };
     }, [loadCompletions]),
   );
 

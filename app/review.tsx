@@ -117,20 +117,23 @@ export default function ReviewScreen() {
 
   const addSuggestion = (suggestion: string) => {
     const match = matchHiddenIngredient(suggestion);
+    if (!match) {
+      // An unknown name would land as a 0 kcal item; let the user pick the real one.
+      setHiddenOpen(true);
+      return;
+    }
     setItems((current) => [
       ...current,
       toMealItem(
-        match
-          ? {
-              name: suggestion,
-              quantity: match.quantity,
-              unit: match.unit,
-              calories: match.kcal,
-              proteinG: match.proteinG,
-              carbsG: match.carbsG,
-              fatG: match.fatG,
-            }
-          : { name: suggestion, quantity: 1, unit: 'serving', calories: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+        {
+          name: suggestion,
+          quantity: match.quantity,
+          unit: match.unit,
+          calories: match.kcal,
+          proteinG: match.proteinG,
+          carbsG: match.carbsG,
+          fatG: match.fatG,
+        },
         true,
       ),
     ]);
