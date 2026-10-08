@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { GradientName } from '@/theme/palette';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
@@ -33,12 +33,17 @@ export function Card({ children, padded = true, gradient, onPress, accessibility
   );
 
   if (!onPress) return body;
+
+  // The touch wrapper is what sits in the parent's layout, so it takes the
+  // card's flex sizing; otherwise a `flex: 1` card shrinks to its content.
+  const { flex, flexGrow, flexShrink, flexBasis, alignSelf, width } = StyleSheet.flatten(style) ?? {};
+  const outer: ViewStyle = { flex, flexGrow, flexShrink, flexBasis, alignSelf, width };
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => pressed && styles.pressed}
+      style={({ pressed }) => [outer, pressed && styles.pressed]}
     >
       {body}
     </Pressable>
